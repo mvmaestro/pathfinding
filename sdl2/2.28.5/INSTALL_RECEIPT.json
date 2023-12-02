@@ -1,0 +1,46 @@
+{
+  "homebrew_version": "4.1.18-37-ga4b4b90",
+  "used_options": [
+
+  ],
+  "unused_options": [
+
+  ],
+  "built_as_bottle": true,
+  "poured_from_bottle": true,
+  "loaded_from_api": true,
+  "installed_as_dependency": false,
+  "installed_on_request": true,
+  "changed_files": [
+    "lib/pkgconfig/sdl2.pc"
+  ],
+  "time": 1700939801,
+  "source_modified_time": 1698944640,
+  "compiler": "clang",
+  "aliases": [
+
+  ],
+  "runtime_dependencies": [
+
+  ],
+  "source": {
+    "spec": "stable",
+    "versions": {
+      "stable": "2.28.5",
+      "head": null,
+      "version_scheme": 0
+    },
+    "path": "/usr/local/Homebrew/Library/Taps/homebrew/homebrew-core/Formula/s/sdl2.rb",
+    "tap_git_head": null,
+    "tap": "homebrew/core"
+  },
+  "arch": "x86_64",
+  "built_on": {
+    "os": "Macintosh",
+    "os_version": "macOS 13.5",
+    "cpu_family": "penryn",
+    "xcode": "14.3",
+    "clt": "14.3.1.0.1.1683849156",
+    "preferred_perl": "5.30"
+  }
+}
