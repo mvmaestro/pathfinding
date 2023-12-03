@@ -26,7 +26,7 @@ public:
 	int gCost;
 	int hCost;
 	int fCost() { return gCost + hCost; };
-	bool walkable = true;
+	bool walkable;
 	bool operator==(const Node &node)
 	{
 		return (this->mID == node.mID);
@@ -48,6 +48,7 @@ Node::Node(SDL_Rect rect, int id)
 	mID = id;
 	mPosition.x = static_cast<int>(rect.x + rect.w/2);
 	mPosition.y = static_cast<int>(rect.y + rect.h/2);
+	walkable = true;
 }
 
 
@@ -75,17 +76,18 @@ private:
 	void RetracePath(Node start, Node target);
 	std::vector<Node> GetNeighbors(Node node);
 	int GetDistance(Node nodeA, Node nodeB);
-
-	// Window created by SDL
 	SDL_Window* mWindow;
 	// Renderer to draw graphics created by SDL
 	SDL_Renderer* mRenderer;
 	// Game should continue to run
 	bool mIsRunning;
 	bool mMouseDown;
+	bool mRightMouseDown;
+	bool mLeftMouseDown;
 	bool mErase;
 	std::vector<Node> mNodes;
 	std::vector<Node> mSelectedNodes;
+	std::vector<Node> mPathNodes;
 	std::vector<Node> mNeighbors;
 	std::vector<Node> mPath;
 	int mXMouse;
@@ -98,6 +100,8 @@ Game::Game()
 	mRenderer = nullptr;
 	mIsRunning = true;
 	mMouseDown = false;
+	mRightMouseDown = false;
+	mLeftMouseDown = false;
 	mErase = false;
 }
 
@@ -135,8 +139,6 @@ bool Game::Initialize()
 	);
 
 	makeNodes(window_width, window_height);
-
-
 	return true;
 }
 
@@ -177,10 +179,20 @@ void Game::ProcessInput()
 
 			case SDL_MOUSEBUTTONDOWN:
 			mMouseDown = true;
+			if (event.button.button  == SDL_BUTTON_RIGHT)
+			{
+				mRightMouseDown = true;
+			}
+			if (event.button.button  == SDL_BUTTON_LEFT)
+			{
+				mLeftMouseDown = true;
+			}
 			break;
 
 			case SDL_MOUSEBUTTONUP:
 			mMouseDown = false;
+			mRightMouseDown = false;
+			mLeftMouseDown = false;
 			break;
 		}
 	}
@@ -190,7 +202,7 @@ void Game::ProcessInput()
 		mIsRunning = false;
 	}
 	
-	if (state[SDL_SCANCODE_LSHIFT])
+	if (state[SDL_SCANCODE_E])
 	{
 		mErase = true;
 	}
@@ -239,7 +251,7 @@ void Game::GenerateOutput()
 
 	}
 
-	if (mMouseDown == true && mErase == false)
+	if (mMouseDown == true && mLeftMouseDown == true)
 	{
 
 		for ( auto node:mNodes)
@@ -248,40 +260,55 @@ void Game::GenerateOutput()
 				&& node.getRect()->y < mYMouse && (node.getRect()->y + node.getRect()->h) > mYMouse)
 			{
 				auto iterator = std::find(mSelectedNodes.begin(), mSelectedNodes.end(), node);
-				if (iterator == mSelectedNodes.end() && mSelectedNodes.size() < 2)
+				if (iterator == mSelectedNodes.end())
 				{
+					node.walkable = false;
 					mSelectedNodes.push_back(node);
-
-					std::cout << mNeighbors.size() << std::endl;
-					std::cout << "node added" << std::endl;
-
 				}
 			}
 		}
 	}
 
-	if (mErase == true && mMouseDown == true)
+	if (mErase == true)
 	{
-
-		for ( auto node:mNodes)
-		{
-			if (node.getRect()->x < mXMouse && (node.getRect()->x + node.getRect()->w) > mXMouse
-				&& node.getRect()->y < mYMouse && (node.getRect()->y + node.getRect()->h) > mYMouse)
-			{
-				auto iterator = std::find(mSelectedNodes.begin(), mSelectedNodes.end(), node);
-				if (iterator != mSelectedNodes.end())
-				{
-					mSelectedNodes.erase(iterator);
-					std::cout << "node deleted" << std::endl;
-
-				}
-			}
-		}
-		mErase = false;
+		mSelectedNodes.clear();
+		mPathNodes.clear();
+		mPath.clear();
 	}
 
 
 	for (auto node:mSelectedNodes)
+	{
+		
+		SDL_SetRenderDrawColor(
+					mRenderer,
+					255,
+					255,
+					255,
+					255
+				);
+
+		SDL_RenderFillRect(mRenderer, node.getRect());
+	}
+
+	if (mRightMouseDown == true)
+		{
+
+			for ( auto node:mNodes)
+			{
+				if (node.getRect()->x < mXMouse && (node.getRect()->x + node.getRect()->w) > mXMouse
+					&& node.getRect()->y < mYMouse && (node.getRect()->y + node.getRect()->h) > mYMouse)
+				{
+					auto iterator = std::find(mPathNodes.begin(), mPathNodes.end(), node);
+					if (iterator == mPathNodes.end() && mPathNodes.size() < 2)
+					{
+						mPathNodes.push_back(node);
+					}
+				}
+			}
+		}
+
+	for (auto node:mPathNodes)
 	{
 		
 		SDL_SetRenderDrawColor(
@@ -294,15 +321,14 @@ void Game::GenerateOutput()
 
 		SDL_RenderFillRect(mRenderer, node.getRect());
 	}
- 	
-	if (mSelectedNodes.size() > 1)
+
+	if (mPathNodes.size() > 1)
 	{
-		findPath(mSelectedNodes[0], mSelectedNodes[1]);
+		findPath(mPathNodes[0], mPathNodes[1]);
 	}
 
 	for (auto node:mPath)
 	{
-		
 		SDL_SetRenderDrawColor(
 					mRenderer,
 					0,
@@ -310,9 +336,8 @@ void Game::GenerateOutput()
 					0,
 					255
 				);
-		if ( std::find(mSelectedNodes.begin(), mSelectedNodes.end(), node) == mSelectedNodes.end() && mSelectedNodes.size() > 1)
+		if ( std::find(mPathNodes.begin(), mPathNodes.end(), node) == mPathNodes.end() && mPathNodes.size() > 1)
 		{
-
 			SDL_RenderFillRect(mRenderer, node.getRect());
 		}
 	}
@@ -336,14 +361,7 @@ void Game::drawGrid(SDL_Renderer* renderer, int windowWidth, int windowHeight)
 	for ( int i = 0; i < windowWidth; i += windowWidth * grid_size)
 	{
 		SDL_RenderDrawLine(renderer, i, 0, i, windowHeight);
-	}
-
-	for ( int i = 0; i < windowHeight; i += windowHeight * grid_size)
-	{
-		SDL_RenderDrawLine(renderer, 0, i, windowWidth, i);
-	}
-}
-
+	} for ( int i = 0; i < windowHeight; i += windowHeight * grid_size) { SDL_RenderDrawLine(renderer, 0, i, windowWidth, i); } }
 void Game::makeNodes(int windowWidth, int windowHeight)
 {
 	int id = 0;
@@ -395,7 +413,8 @@ void Game::findPath(Node start, Node target)
 
 		for (Node neighbor:GetNeighbors(currentNode))
 		{
-			if (!neighbor.walkable || std::find(closedSet.begin(), closedSet.end(), neighbor) != closedSet.end())
+			if (/*!neighbor.walkable*/ std::find(mSelectedNodes.begin(), mSelectedNodes.end(), neighbor) != mSelectedNodes.end()|| 
+				std::find(closedSet.begin(), closedSet.end(), neighbor) != closedSet.end())
 			{
 				continue;
 			}
