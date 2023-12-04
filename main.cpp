@@ -6,9 +6,9 @@
 #include <algorithm>
 #include <cmath>
 
-const int window_width = 700;
-const int window_height = 700;
-const float grid_size = 0.05;
+const int GLOBAL_CONST_WINDOW_WIDTH = 700;
+const int GLOBAL_CONST_WINDOW_HEIGHT = 700;
+const float GLOBAL_CONST_GRID_SIZE = 0.05;
 
 struct Vector2 {
 	float x;
@@ -18,15 +18,20 @@ struct Vector2 {
 class Node
 {
 public:
-	std::vector<Node> parent;
+	// SDL_Rect corresponds to node location and size
 	Node(SDL_Rect rect, int id);
-	SDL_Rect* getRect() { return &mRect; };
-	Vector2 getPosition() { return mPosition; };
+
+	SDL_Rect* GetRect() { return &mRect; };
+	Vector2 GetPosition() { return mPosition; };
 	int GetId() { return mID; }
+
+	// Used for to calculate A* algorithm
 	int gCost;
 	int hCost;
 	int fCost() { return gCost + hCost; };
 	bool walkable;
+	std::vector<Node> parent;
+
 	bool operator==(const Node &node)
 	{
 		return (this->mID == node.mID);
@@ -52,49 +57,56 @@ Node::Node(SDL_Rect rect, int id)
 }
 
 
-			
-
-
-class Game
+class Pathfinding
 {
 public:
-	Game();
-	// Initialize the game
+	Pathfinding();
+	
 	bool Initialize();
-	// Runs the game loop until the game is over
+	
 	void RunLoop();
-	// Shutdown the game
+	
 	void Shutdown();
 private:
-	// Helper functions for the game loop
 	void ProcessInput();
-	void UpdateGame() {};
 	void GenerateOutput();
-	void drawGrid(SDL_Renderer* renderer, int windowWidth, int windowHeight);
-	void makeNodes(int windowWidth, int windowHeight);
-	void findPath(Node start, Node target);
+
+	void MakeNodes(int windowWidth, int windowHeight);
+	void DrawGrid(SDL_Renderer* renderer, int windowWidth, int windowHeight);
+	void FindPath(Node start, Node target);
 	void RetracePath(Node start, Node target);
 	std::vector<Node> GetNeighbors(Node node);
 	int GetDistance(Node nodeA, Node nodeB);
 	SDL_Window* mWindow;
 	// Renderer to draw graphics created by SDL
 	SDL_Renderer* mRenderer;
-	// Game should continue to run
+
+	// Pathfinding should continue to run
 	bool mIsRunning;
+
 	bool mMouseDown;
 	bool mRightMouseDown;
 	bool mLeftMouseDown;
-	bool mErase;
-	std::vector<Node> mNodes;
-	std::vector<Node> mSelectedNodes;
-	std::vector<Node> mPathNodes;
-	std::vector<Node> mNeighbors;
-	std::vector<Node> mPath;
+	// Current mouse location within the window
 	int mXMouse;
 	int mYMouse;
+
+	// Clears the following vectors if true
+	bool mErase;
+
+	// All the nodes in the program
+	std::vector<Node> mNodes;
+	// Nodes selected to be !walkable (walls, white)
+	std::vector<Node> mSelectedNodes;
+	// Nodes selected to make a path from (start, target)
+	std::vector<Node> mPathNodes;
+	// Nodes calculated as neighbors in the A* algorithm
+	std::vector<Node> mNeighbors;
+	// The final path retraced from finish to start
+	std::vector<Node> mPath;
 };
 
-Game::Game()
+Pathfinding::Pathfinding()
 {
 	mWindow = nullptr;
 	mRenderer = nullptr;
@@ -107,7 +119,7 @@ Game::Game()
 
 // The Initialization function returns true 
 //if initialization succeeds and false otherwise
-bool Game::Initialize()
+bool Pathfinding::Initialize()
 {
 	int sdlResult = SDL_Init(SDL_INIT_VIDEO);
 
@@ -118,11 +130,11 @@ bool Game::Initialize()
 	}
 
 	mWindow = SDL_CreateWindow(
-				"Game Programming (Chapter 1)",
+				"A* Pathfinding Example",
 				100,  // Top left x-coordinate of window
 				100,  // Top left y-coordinate of window
-				window_width, // Width of window
-				window_height,  // Height of window
+				GLOBAL_CONST_WINDOW_WIDTH, // Width of window
+				GLOBAL_CONST_WINDOW_HEIGHT,  // Height of window
 				0     // Flags (0 for no flags set)
 			);
 
@@ -138,29 +150,28 @@ bool Game::Initialize()
 		SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
 	);
 
-	makeNodes(window_width, window_height);
+	MakeNodes(GLOBAL_CONST_WINDOW_WIDTH, GLOBAL_CONST_WINDOW_HEIGHT);
 	return true;
 }
 
-// Runloop keeps running iterations of the game until mIsRunning becomes false
-void Game::RunLoop()
+// Runloop keeps running iterations of the pathfinding  until mIsRunning becomes false
+void Pathfinding::RunLoop()
 {
 	while (mIsRunning)
 	{
 		ProcessInput();
-		UpdateGame();
 		GenerateOutput();
 	}
 }
 
-void Game::Shutdown()
+void Pathfinding::Shutdown()
 {
 	SDL_DestroyWindow(mWindow);
 	SDL_DestroyRenderer(mRenderer);
 	SDL_Quit();
 }
 
-void Game::ProcessInput()
+void Pathfinding::ProcessInput()
 {
 	SDL_Event event;
 	const Uint8* state = SDL_GetKeyboardState(NULL);
@@ -213,7 +224,7 @@ void Game::ProcessInput()
 
 }
 
-void Game::GenerateOutput()
+void Pathfinding::GenerateOutput()
 {
 	SDL_SetRenderDrawColor(
 		mRenderer,
@@ -225,10 +236,6 @@ void Game::GenerateOutput()
 
 	// Clear the back buffer to the current draw color
 	SDL_RenderClear(mRenderer);
-
-	// Draw game scene
-
-	
 
 	SDL_SetRenderDrawBlendMode(mRenderer, SDL_BLENDMODE_BLEND);
 
@@ -242,11 +249,11 @@ void Game::GenerateOutput()
 	
 	for ( auto node:mNodes)
 	{
-		if (node.getRect()->x < mXMouse && (node.getRect()->x + node.getRect()->w) > mXMouse
-			&& node.getRect()->y < mYMouse && (node.getRect()->y + node.getRect()->h) > mYMouse)
+		if (node.GetRect()->x < mXMouse && (node.GetRect()->x + node.GetRect()->w) > mXMouse
+			&& node.GetRect()->y < mYMouse && (node.GetRect()->y + node.GetRect()->h) > mYMouse)
 		{
 
-			SDL_RenderFillRect(mRenderer, node.getRect());
+			SDL_RenderFillRect(mRenderer, node.GetRect());
 		}
 
 	}
@@ -256,8 +263,8 @@ void Game::GenerateOutput()
 
 		for ( auto node:mNodes)
 		{
-			if (node.getRect()->x < mXMouse && (node.getRect()->x + node.getRect()->w) > mXMouse
-				&& node.getRect()->y < mYMouse && (node.getRect()->y + node.getRect()->h) > mYMouse)
+			if (node.GetRect()->x < mXMouse && (node.GetRect()->x + node.GetRect()->w) > mXMouse
+				&& node.GetRect()->y < mYMouse && (node.GetRect()->y + node.GetRect()->h) > mYMouse)
 			{
 				auto iterator = std::find(mSelectedNodes.begin(), mSelectedNodes.end(), node);
 				if (iterator == mSelectedNodes.end())
@@ -288,7 +295,7 @@ void Game::GenerateOutput()
 					255
 				);
 
-		SDL_RenderFillRect(mRenderer, node.getRect());
+		SDL_RenderFillRect(mRenderer, node.GetRect());
 	}
 
 	if (mRightMouseDown == true)
@@ -296,8 +303,8 @@ void Game::GenerateOutput()
 
 			for ( auto node:mNodes)
 			{
-				if (node.getRect()->x < mXMouse && (node.getRect()->x + node.getRect()->w) > mXMouse
-					&& node.getRect()->y < mYMouse && (node.getRect()->y + node.getRect()->h) > mYMouse)
+				if (node.GetRect()->x < mXMouse && (node.GetRect()->x + node.GetRect()->w) > mXMouse
+					&& node.GetRect()->y < mYMouse && (node.GetRect()->y + node.GetRect()->h) > mYMouse)
 				{
 					auto iterator = std::find(mPathNodes.begin(), mPathNodes.end(), node);
 					if (iterator == mPathNodes.end() && mPathNodes.size() < 2)
@@ -319,12 +326,12 @@ void Game::GenerateOutput()
 					255
 				);
 
-		SDL_RenderFillRect(mRenderer, node.getRect());
+		SDL_RenderFillRect(mRenderer, node.GetRect());
 	}
 
 	if (mPathNodes.size() > 1)
 	{
-		findPath(mPathNodes[0], mPathNodes[1]);
+		FindPath(mPathNodes[0], mPathNodes[1]);
 	}
 
 	for (auto node:mPath)
@@ -338,16 +345,17 @@ void Game::GenerateOutput()
 				);
 		if ( std::find(mPathNodes.begin(), mPathNodes.end(), node) == mPathNodes.end() && mPathNodes.size() > 1)
 		{
-			SDL_RenderFillRect(mRenderer, node.getRect());
+			SDL_RenderFillRect(mRenderer, node.GetRect());
 		}
 	}
 
-	drawGrid(mRenderer, window_width,window_height);
+	DrawGrid(mRenderer, GLOBAL_CONST_WINDOW_WIDTH,GLOBAL_CONST_WINDOW_HEIGHT);
 	// Swap the front and back buffers
 	SDL_RenderPresent(mRenderer);
 }
 
-void Game::drawGrid(SDL_Renderer* renderer, int windowWidth, int windowHeight)
+// Draws a grid of lines over the nodes at the end of generate output
+void Pathfinding::DrawGrid(SDL_Renderer* renderer, int windowWidth, int windowHeight)
 {
 
 		SDL_SetRenderDrawColor(
@@ -358,18 +366,20 @@ void Game::drawGrid(SDL_Renderer* renderer, int windowWidth, int windowHeight)
 		255
 	);
 	
-	for ( int i = 0; i < windowWidth; i += windowWidth * grid_size)
+	for ( int i = 0; i < windowWidth; i += windowWidth * GLOBAL_CONST_GRID_SIZE)
 	{
 		SDL_RenderDrawLine(renderer, i, 0, i, windowHeight);
-	} for ( int i = 0; i < windowHeight; i += windowHeight * grid_size) { SDL_RenderDrawLine(renderer, 0, i, windowWidth, i); } }
-void Game::makeNodes(int windowWidth, int windowHeight)
+	} for ( int i = 0; i < windowHeight; i += windowHeight * GLOBAL_CONST_GRID_SIZE) { SDL_RenderDrawLine(renderer, 0, i, windowWidth, i); } }
+
+// Makes nodes row by row and assigns an ID to each node, node size is dependent on the window and the grid size
+void Pathfinding::MakeNodes(int windowWidth, int windowHeight)
 {
 	int id = 0;
-	for ( int i = 0; i < windowWidth; i += windowWidth * grid_size)
+	for ( int i = 0; i < windowWidth; i += windowWidth * GLOBAL_CONST_GRID_SIZE)
 	{
-		for ( int j = 0; j < windowHeight; j += windowHeight * grid_size)
+		for ( int j = 0; j < windowHeight; j += windowHeight * GLOBAL_CONST_GRID_SIZE)
 		{
-			SDL_Rect rect{i, j, static_cast<int>(windowWidth * grid_size), static_cast<int>(windowHeight * grid_size)};
+			SDL_Rect rect{i, j, static_cast<int>(windowWidth * GLOBAL_CONST_GRID_SIZE), static_cast<int>(windowHeight * GLOBAL_CONST_GRID_SIZE)};
 			auto node = new Node(rect, id);
 			mNodes.push_back(*node);
 			id++;
@@ -377,7 +387,8 @@ void Game::makeNodes(int windowWidth, int windowHeight)
 	}
 }
 
-void Game::findPath(Node start, Node target)
+// Basic implementation of the A* pathfinding algorithm
+void Pathfinding::FindPath(Node start, Node target)
 {
 	std::vector<Node> openSet;
 	std::vector<Node> closedSet;
@@ -437,7 +448,8 @@ void Game::findPath(Node start, Node target)
 	}
 }
 
-void Game::RetracePath(Node start, Node target)
+// Used to draw the shortest path after find path completes (if a path is available)
+void Pathfinding::RetracePath(Node start, Node target)
 {
 	std::vector<Node> path;
 	Node currentNode = target;
@@ -459,22 +471,23 @@ void Game::RetracePath(Node start, Node target)
 	mPath = path;
 }
 
-std::vector<Node> Game::GetNeighbors(Node currentNode)
+// Used within the A* algorithm to get the surrounding nodes of the current node being analyzed
+std::vector<Node> Pathfinding::GetNeighbors(Node currentNode)
 {
 	std::vector<Node> neighbors;
 	for (auto node:mNodes)
 	{
-		if (node.getPosition().x == currentNode.getPosition().x && node.getPosition().y == currentNode.getPosition().y)
+		if (node.GetPosition().x == currentNode.GetPosition().x && node.GetPosition().y == currentNode.GetPosition().y)
 		{
 			continue;
 		}
 
-		if (node.getPosition().x > 0 && node.getPosition().x < window_width && 
-			node.getPosition().x > (currentNode.getPosition().x - (window_width*grid_size+window_width*0.015)) &&
-			node.getPosition().x < (currentNode.getPosition().x + (window_width*grid_size+window_width*0.015)) &&
-			node.getPosition().y >= 0 && node.getPosition().y < window_height &&
-			node.getPosition().y > (currentNode.getPosition().y - (window_height*grid_size+window_width*0.015)) &&
-			node.getPosition().y < (currentNode.getPosition().y + (window_height*grid_size+window_width*0.015)))
+		if (node.GetPosition().x > 0 && node.GetPosition().x < GLOBAL_CONST_WINDOW_WIDTH && 
+			node.GetPosition().x > (currentNode.GetPosition().x - (GLOBAL_CONST_WINDOW_WIDTH*GLOBAL_CONST_GRID_SIZE+GLOBAL_CONST_WINDOW_WIDTH*0.015)) &&
+			node.GetPosition().x < (currentNode.GetPosition().x + (GLOBAL_CONST_WINDOW_WIDTH*GLOBAL_CONST_GRID_SIZE+GLOBAL_CONST_WINDOW_WIDTH*0.015)) &&
+			node.GetPosition().y >= 0 && node.GetPosition().y < GLOBAL_CONST_WINDOW_HEIGHT &&
+			node.GetPosition().y > (currentNode.GetPosition().y - (GLOBAL_CONST_WINDOW_HEIGHT*GLOBAL_CONST_GRID_SIZE+GLOBAL_CONST_WINDOW_WIDTH*0.015)) &&
+			node.GetPosition().y < (currentNode.GetPosition().y + (GLOBAL_CONST_WINDOW_HEIGHT*GLOBAL_CONST_GRID_SIZE+GLOBAL_CONST_WINDOW_WIDTH*0.015)))
 
 		{
 			neighbors.push_back(node);
@@ -484,10 +497,11 @@ std::vector<Node> Game::GetNeighbors(Node currentNode)
 	return neighbors;
 }
 
-int Game::GetDistance(Node nodeA, Node nodeB)
+// Used within the A* algorithm to calculate distance between selected nodes
+int Pathfinding::GetDistance(Node nodeA, Node nodeB)
 {
-	int distanceX = std::abs(nodeA.getPosition().x - nodeB.getPosition().x);
-	int distanceY = std::abs(nodeA.getPosition().y - nodeB.getPosition().y);
+	int distanceX = std::abs(nodeA.GetPosition().x - nodeB.GetPosition().x);
+	int distanceY = std::abs(nodeA.GetPosition().y - nodeB.GetPosition().y);
 
 	if (distanceX > distanceY)
 	{
@@ -502,13 +516,13 @@ int Game::GetDistance(Node nodeA, Node nodeB)
 	
 int main(int argc, char** argv)
 {
-	Game game;
-	bool success = game.Initialize();
+	Pathfinding pathfinding;
+	bool success = pathfinding.Initialize();
 	if (success)
 	{
-		game.RunLoop();
+		pathfinding.RunLoop();
 	}
-	game.Shutdown(); 
+	pathfinding.Shutdown(); 
 	return 0;
 }
 
